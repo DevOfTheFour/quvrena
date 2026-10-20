@@ -120,6 +120,12 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/continue.lua"
     )
 
+    add_test(
+        NAME quvrena_compound_assignment
+        COMMAND $<TARGET_FILE:quvrena>
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/compound_assignment.lua"
+    )
+
     add_executable(quvrena_embed_test
         tests/embed_smoke.c
     )

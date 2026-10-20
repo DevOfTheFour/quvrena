@@ -48,7 +48,9 @@ static const char *const luaX_tokens [] = {
     "in", "local", "nil", "not", "or", "repeat",
     "return", "then", "true", "until", "while",
     "//", "..", "...", "==", ">=", "<=", "~=",
-    "<<", ">>", "::", "<eof>",
+    "<<", ">>",
+    "+=", "-=", "*=", "/=", "..=",
+    "::", "<eof>",
     "<number>", "<integer>", "<name>", "<string>"
 };
 
@@ -476,8 +478,19 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         next(ls);
         break;
       }
+      case '+': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_ADDEQ; /* '+=' */
+        return '+';
+      }
+      case '*': {
+        next(ls);
+        if (check_next1(ls, '=')) return TK_MULEQ; /* '*=' */
+        return '*';
+      }
       case '-': {  /* '-' or '--' (comment) */
         next(ls);
+        if (check_next1(ls, '=')) return TK_SUBEQ; /* '-=' */
         if (ls->current != '-') return '-';
         /* else is a comment */
         next(ls);
@@ -525,6 +538,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       case '/': {
         next(ls);
         if (check_next1(ls, '/')) return TK_IDIV;  /* '//' */
+        if (check_next1(ls, '=')) return TK_DIVEQ; /* '/=' */
         else return '/';
       }
       case '~': {
@@ -546,7 +560,8 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         if (check_next1(ls, '.')) {
           if (check_next1(ls, '.'))
             return TK_DOTS;   /* '...' */
-          else return TK_CONCAT;   /* '..' */
+          if (check_next1(ls, '=')) return TK_CONCATEQ; /* '..=' */
+          return TK_CONCAT;   /* '..' */
         }
         else if (!lisdigit(ls->current)) return '.';
         else return read_numeral(ls, seminfo);

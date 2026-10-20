@@ -2042,14 +2042,76 @@ static void funcstat (LexState *ls, int line) {
 }
 
 
+/*
+** Map compound-assignment tokens to binary operators.
+*/
+static BinOpr compoundop (int token) {
+  switch (token)
+  {
+    case TK_ADDEQ: return OPR_ADD;
+    case TK_SUBEQ: return OPR_SUB;
+    case TK_MULEQ: return OPR_MUL;
+    case TK_DIVEQ: return OPR_DIV;
+    case TK_CONCATEQ: return OPR_CONCAT;
+
+    default: return OPR_NOBINOPR;
+  }
+}
+
+
+/*
+** compoundassign -> suffixedexp compoundop expr
+*/
+static void compoundassign (LexState *ls, expdesc *var) {
+  FuncState *fs = ls->fs;
+  expdesc left;
+  expdesc right;
+  BinOpr op = compoundop(ls->t.token);
+  int line = ls->linenumber;
+
+  lua_assert(op != OPR_NOBINOPR);
+
+  check_condition(ls, vkisvar(var->k), "invalid compound assignment target");
+
+  /* Reject assignments to <const> and readonly globals. */
+  check_readonly(ls, var);
+
+  /*
+  ** Save the destination and read its previous value.
+  ** This must happen before evaluating the RHS.
+  */
+  luaK_compoundload(fs, var, &left);
+
+  luaX_next(ls);  /* skip compound operator */
+
+  luaK_infix(fs, op, &left);
+
+  /* Parse the complete right-hand expression. */
+  expr(ls, &right);
+
+  /* Calculate the result using regular Lua semantics. */
+  luaK_posfix(fs, op, &left, &right, line);
+
+  /* Store into the preserved destination. */
+  luaK_storevar(fs, var, &left);
+
+  luaK_fixline(fs, line);
+}
+
+
 static void exprstat (LexState *ls) {
-  /* stat -> func | assignment */
+  /* stat -> func | assignment | compoundassignment */
   FuncState *fs = ls->fs;
   struct LHS_assign v;
+  BinOpr op;
   suffixedexp(ls, &v.v);
   if (ls->t.token == '=' || ls->t.token == ',') { /* stat -> assignment ? */
     v.prev = NULL;
     restassign(ls, &v, 1);
+  }
+  else if ((op = compoundop(ls->t.token)) != OPR_NOBINOPR) {
+    /* Quvrena compound assignment */
+    compoundassign(ls, &v.v);
   }
   else {  /* stat -> func */
     Instruction *inst;

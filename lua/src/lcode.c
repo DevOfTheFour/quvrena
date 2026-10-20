@@ -1141,6 +1141,108 @@ void luaK_storevar (FuncState *fs, expdesc *var, expdesc *ex) {
 
 
 /*
+** Load the old value for a compound assignment while
+** preserving the destination table and key.
+**
+** This is necessary because ordinary indexed reads
+** release registers that are still needed for storing
+** the result.
+**
+** For indexed destinations, both the table and a
+** register-based key are saved before the RHS runs.
+*/
+void luaK_compoundload (FuncState *fs, expdesc *var, expdesc *e) {
+  int reg;
+  int result;
+
+  /* Local variables and upvalues have stable slots. */
+  if (var->k == VLOCAL || var->k == VUPVAL) {
+    *e = *var;
+    luaK_exp2nextreg(fs, e);
+    return;
+  }
+
+  /* Materialize a virtual vararg table if necessary. */
+  if (var->k == VVARARG) {
+    needvatab(fs->f);
+    var->k = VINDEXED;
+  }
+
+  /*
+  ** Capture the actual table value.
+  ** This prevents the RHS or metamethods from
+  ** redirecting the assignment to a different table.
+  */
+  reg = fs->freereg;
+  luaK_reserveregs(fs, 1);
+
+  if (var->k == VINDEXUP) {
+    luaK_codeABC(fs, OP_GETUPVAL, reg, var->u.ind.t, 0);
+    var->k = VINDEXSTR;
+  }
+  else {
+    lua_assert(var->k == VINDEXI ||
+              var->k == VINDEXSTR ||
+              var->k == VINDEXED);
+    luaK_codeABC(fs, OP_MOVE, reg, var->u.ind.t, 0);
+  }
+
+  var->u.ind.t = cast_byte(reg);
+
+  /*
+  ** Capture a register-based key separately.
+  ** Constants are already stable.
+  */
+  if (var->k == VINDEXED) {
+    int keyreg = fs->freereg;
+    luaK_reserveregs(fs, 1);
+
+    luaK_codeABC(fs, OP_MOVE, keyreg, var->u.ind.idx, 0);
+
+    var->u.ind.idx = cast_byte(keyreg);
+  }
+
+  /*
+  ** Read into a fresh register without freeing
+  ** either the saved table or the saved key.
+  */
+  result = fs->freereg;
+  luaK_reserveregs(fs, 1);
+
+  switch (var->k)
+  {
+    case VINDEXI: {
+      luaK_codeABC(fs, OP_GETI,
+                   result,
+                   var->u.ind.t,
+                   var->u.ind.idx);
+      break;
+    }
+    case VINDEXSTR: {
+      luaK_codeABC(fs, OP_GETFIELD,
+                   result,
+                   var->u.ind.t,
+                   var->u.ind.idx);
+      break;
+    }
+    case VINDEXED: {
+      luaK_codeABC(fs, OP_GETTABLE,
+                   result,
+                   var->u.ind.t,
+                   var->u.ind.idx);
+      break;
+    }
+    default:
+      lua_assert(0);
+  }
+
+  e->k = VNONRELOC;
+  e->u.info = result;
+  e->t = e->f = NO_JUMP;
+}
+
+
+/*
 ** Negate condition 'e' (where 'e' is a comparison).
 */
 static void negatecondition (FuncState *fs, expdesc *e) {
