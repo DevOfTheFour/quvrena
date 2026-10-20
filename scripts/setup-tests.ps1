@@ -6,7 +6,7 @@ $expectedHash = "da07b543872dc0bb2ff12aabd0c248578d78df3eb6b67efdc537a46d455c7f3
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $destination = Join-Path $root "tests/upstream/lua-$version-tests"
 
-$temporary = Join-Path $env:TEMP (
+$temporary = Join-Path ([System.IO.Path]::GetTempPath()) (
     "quvrena-tests-" + [guid]::NewGuid().ToString("N")
 )
 

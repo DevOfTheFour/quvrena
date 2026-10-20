@@ -1,0 +1,130 @@
+name: Quvrena CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lua/src/**'
+      - 'tests/**'
+      - 'benchmarks/**'
+      - 'scripts/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - '.github/workflows/ci.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lua/src/**'
+      - 'tests/**'
+      - 'benchmarks/**'
+      - 'scripts/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - '.github/workflows/ci.yml'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }} / ${{ matrix.build_type }}
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            compiler: msvc-v145
+            build_type: Debug
+
+          - os: windows-2025
+            compiler: msvc-v145
+            build_type: Release
+
+          - os: ubuntu-24.04
+            compiler: gcc
+            build_type: Debug
+
+          - os: ubuntu-24.04
+            compiler: gcc
+            build_type: Release
+
+          - os: ubuntu-24.04
+            compiler: clang
+            build_type: Debug
+
+          - os: ubuntu-24.04
+            compiler: clang
+            build_type: Release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Lua compatibility tests
+        shell: pwsh
+        run: ./scripts/setup-tests.ps1
+
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -G "Visual Studio 18 2026" `
+            -A x64 `
+            -T v145 `
+            -DBUILD_TESTING=ON `
+            -DQUVRENA_REQUIRE_UPSTREAM_TESTS=ON
+
+      - name: Configure Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER="$CC" \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_TESTING=ON \
+            -DQUVRENA_REQUIRE_UPSTREAM_TESTS=ON
+
+      - name: Build Quvrena
+        run: >
+          cmake --build build
+          --config ${{ matrix.build_type }}
+          --parallel 2
+
+      - name: Run tests
+        run: >
+          ctest --test-dir build
+          -C ${{ matrix.build_type }}
+          --output-on-failure
+          --parallel 2
+
+      - name: Validate benchmark runner
+        if: matrix.build_type == 'Release'
+        shell: pwsh
+        run: |
+          if ($IsWindows) {
+              $binary = "./build/Release/quvrena.exe"
+          } else {
+              $binary = "./build/quvrena"
+          }
+
+          & $binary ./benchmarks/run.lua 10000 1
+
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }

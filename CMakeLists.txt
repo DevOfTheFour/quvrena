@@ -79,6 +79,12 @@ endif()
 add_executable(quvrenac "${LUA_SRC}/luac.c")
 target_link_libraries(quvrenac PRIVATE quvrena_core)
 
+option(
+    QUVRENA_REQUIRE_UPSTREAM_TESTS
+    "Require Lua upstream compatibility tests"
+    OFF
+)
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -133,8 +139,15 @@ if(BUILD_TESTING)
             PASS_REGULAR_EXPRESSION "final OK"
         )
     else()
-        message(STATUS
-            "Upstream tests unavailable. Run scripts/setup-tests.ps1"
-        )
+        if(QUVRENA_REQUIRE_UPSTREAM_TESTS)
+            message(FATAL_ERROR
+                "Lua upstream tests are required but missing. "
+                "Run scripts/setup-tests.ps1"
+            )
+        else()
+            message(STATUS
+                "Upstream tests unavailable. Run scripts/setup-tests.ps1"
+            )
+        endif()
     endif()
 endif()
