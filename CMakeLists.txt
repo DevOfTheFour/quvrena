@@ -112,7 +112,7 @@ if(BUILD_TESTING)
         COMMAND $<TARGET_FILE:quvrena_embed_test>
     )
 
-    # Official Lua 5.5.1 compatibility tests
+    # Official Lua compatibility suite
     set(LUA_TESTS_DIR
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/upstream/lua-5.5.1-tests"
     )
@@ -121,15 +121,20 @@ if(BUILD_TESTING)
         add_test(
             NAME quvrena_upstream_compatibility
             COMMAND $<TARGET_FILE:quvrena>
-                -e "_U=true"
-                all.lua
+            -e "_U=true"
+            all.lua
         )
 
         set_tests_properties(
             quvrena_upstream_compatibility
             PROPERTIES
-                WORKING_DIRECTORY "${LUA_TESTS_DIR}"
-                TIMEOUT 600
+            WORKING_DIRECTORY "${LUA_TESTS_DIR}"
+            TIMEOUT 600
+            PASS_REGULAR_EXPRESSION "final OK"
+        )
+    else()
+        message(STATUS
+            "Upstream tests unavailable. Run scripts/setup-tests.ps1"
         )
     endif()
 endif()
