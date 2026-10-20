@@ -79,6 +79,14 @@ endif()
 add_executable(quvrenac "${LUA_SRC}/luac.c")
 target_link_libraries(quvrenac PRIVATE quvrena_core)
 
+# MSVC Debug builds use larger native stack frames.
+# Reserve 8 MiB for the interpreter stack during debugging.
+if(MSVC)
+    target_link_options(quvrena PRIVATE
+        "$<$<CONFIG:Debug>:/STACK:8388608>"
+    )
+endif()
+
 option(
     QUVRENA_REQUIRE_UPSTREAM_TESTS
     "Require Lua upstream compatibility tests"
