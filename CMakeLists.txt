@@ -113,6 +113,13 @@ if(BUILD_TESTING)
             -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke.lua"
     )
 
+    # Quvrena language extensions
+    add_test(
+        NAME quvrena_continue
+        COMMAND $<TARGET_FILE:quvrena>
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/continue.lua"
+    )
+
     add_executable(quvrena_embed_test
         tests/embed_smoke.c
     )

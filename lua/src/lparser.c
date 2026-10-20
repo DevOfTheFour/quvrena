@@ -1562,6 +1562,40 @@ static void breakstat (LexState *ls, int line) {
 
 
 /*
+** Internal label used by the 'continue' statement.
+** The name is not a valid Lua identifier, so user-defined
+** labels cannot conflict with it.
+*/
+static TString *continuename (LexState *ls) {
+  static const char name[] = "(continue)";
+  return luaX_newstring(ls, name, sizeof(name) - 1);
+}
+
+
+/*
+** Continue statement.
+** Semantically equivalent to a goto targeting the
+** continuation point of the nearest enclosing loop.
+*/
+static void continuestat (LexState *ls, int line) {
+  BlockCnt *bl;
+
+  /* Find the nearest enclosing loop */
+  for (bl = ls->fs->bl; bl != NULL; bl = bl->previous) {
+    if (bl->isloop)
+      break;
+  }
+
+  if (bl == NULL)
+    luaX_syntaxerror(ls, "continue outside loop");
+  
+  luaX_next(ls); /* skip 'continue' */
+
+  newgotoentry(ls, continuename(ls), line);
+}
+
+
+/*
 ** Check whether there is already a label with the given 'name' at
 ** current function.
 */
@@ -1595,6 +1629,8 @@ static void whilestat (LexState *ls, int line) {
   enterblock(fs, &bl, 1);
   checknext(ls, TK_DO);
   block(ls);
+  /* 'continue' returns to the condition */
+  createlabel(ls, continuename(ls), line, 0);
   luaK_jumpto(fs, whileinit);
   check_match(ls, TK_END, TK_WHILE, line);
   leaveblock(fs);
@@ -1613,6 +1649,8 @@ static void repeatstat (LexState *ls, int line) {
   luaX_next(ls);  /* skip REPEAT */
   statlist(ls);
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
+  /* 'continue' evaluates the until condition */
+  createlabel(ls, continuename(ls), line, 0);
   condexit = cond(ls);  /* read condition (inside scope block) */
   if (bl2.upval) {  /* upvalues? */
     int exit = luaK_jump(fs);  /* normal exit must jump over fix */
@@ -1673,6 +1711,11 @@ static void forbody (LexState *ls, int base, int line, int nvars, int isgen) {
   adjustlocalvars(ls, nvars);
   luaK_reserveregs(fs, nvars);
   block(ls);
+  /*
+  ** Continue proceeds to the loop iteration machinery,
+  ** after the body and before the per-iteration scope ends.
+  */
+  createlabel(ls, continuename(ls), line, 0);
   leaveblock(fs);  /* end of scope for declared variables */
   fixforjump(fs, prep, luaK_getlabel(fs), 0);
   if (isgen) {  /* generic for? */
@@ -2017,6 +2060,37 @@ static void exprstat (LexState *ls) {
 }
 
 
+/*
+** Recognize 'continue' only when used as a statement.
+** Keep existing assignments and function calls valid.
+*/
+static int iscontinuestat(LexState *ls) {
+  int next;
+
+  if (ls->t.token != TK_NAME ||
+      strcmp(getstr(ls->t.seminfo.ts), "continue") != 0)
+    return 0;
+  
+  next = luaX_lookahead(ls);
+
+  switch (next) {
+    /* Ordinary assignment or function call */
+    case '=':
+    case ',':
+    case '.':
+    case '[':
+    case ':':
+    case '(':
+    case '{':
+    case TK_STRING:
+      return 0;
+
+    default:
+      return 1;
+  }
+}
+
+
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
   FuncState *fs = ls->fs;
@@ -2131,7 +2205,10 @@ static void statement (LexState *ls) {
 #endif
     /* FALLTHROUGH */
     default: {  /* stat -> func | assignment */
-      exprstat(ls);
+      if (iscontinuestat(ls))
+        continuestat(ls, line);
+      else
+        exprstat(ls);
       break;
     }
   }
