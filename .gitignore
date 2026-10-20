@@ -58,3 +58,9 @@ dkms.conf
 build/
 .vs/
 .vscode/
+
+# Generated benchmark results
+benchmarks/results/
+
+# Downloaded official Lua test suite
+tests/upstream/lua-5.5.1-tests/

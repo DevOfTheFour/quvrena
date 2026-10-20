@@ -111,4 +111,25 @@ if(BUILD_TESTING)
         NAME quvrena_c_api
         COMMAND $<TARGET_FILE:quvrena_embed_test>
     )
+
+    # Official Lua 5.5.1 compatibility tests
+    set(LUA_TESTS_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/upstream/lua-5.5.1-tests"
+    )
+
+    if(EXISTS "${LUA_TESTS_DIR}/all.lua")
+        add_test(
+            NAME quvrena_upstream_compatibility
+            COMMAND $<TARGET_FILE:quvrena>
+                -e "_U=true"
+                all.lua
+        )
+
+        set_tests_properties(
+            quvrena_upstream_compatibility
+            PROPERTIES
+                WORKING_DIRECTORY "${LUA_TESTS_DIR}"
+                TIMEOUT 600
+        )
+    endif()
 endif()
