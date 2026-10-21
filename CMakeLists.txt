@@ -138,6 +138,19 @@ if(BUILD_TESTING)
             -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/regression.lua"
     )
 
+    # Quvrena standard library tests
+    add_test(
+        NAME quvrena_table_extensions
+        COMMAND $<TARGET_FILE:quvrena>
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/table.lua"
+    )
+
+    add_test(
+        NAME quvrena_table_extensions_compile
+        COMMAND $<TARGET_FILE:quvrenac>
+            -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/table.lua"
+    )
+
     add_executable(quvrena_embed_test
         tests/embed_smoke.c
     )

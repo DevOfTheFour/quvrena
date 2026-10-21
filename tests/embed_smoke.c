@@ -18,6 +18,17 @@ int main(void)
         lua_isinteger(L, -1) &&
         lua_tointeger(L, -1) == 42;
 
+    int extensions_status = luaL_dostring(L,
+        "local t = {1, 2, 3}; "
+        "table.clear(t); "
+        "assert(next(t) == nil)"
+    );
+
+    if (extensions_status != LUA_OK) {
+        lua_close(L);
+        return 1;
+    }
+
     lua_close(L);
 
     return success ? 0 : 1;

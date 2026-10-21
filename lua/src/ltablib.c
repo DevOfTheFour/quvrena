@@ -406,10 +406,222 @@ static int sort (lua_State *L) {
   return 0;
 }
 
+
+/*
+** Remove all raw entries without replacing the table.
+** Keep its metatable and object identity.
+*/
+static int tclear (lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_settop(L, 1);
+
+  lua_pushnil(L);
+
+  while (lua_next(L, 1) != 0)
+  {
+    lua_pop(L, 1);        /* discard value */
+    lua_pushvalue(L, -1); /* copy key */
+    lua_pushnil(L);
+    lua_rawset(L, 1);     /* remove existing key */
+  }
+
+  return 1; /* original table */
+}
+
+
+/*
+** Shallow-clone all raw entries.
+** Preserve the original metatable.
+*/
+static int tclone (lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_settop(L, 1);
+
+  lua_newtable(L);  /* destination: index 2 */
+  lua_pushnil(L);
+
+  while (lua_next(L, 1) != 0) {
+    lua_pushvalue(L, -2);  /* key */
+    lua_pushvalue(L, -2);  /* value */
+    lua_rawset(L, 2);
+    lua_pop(L, 1);         /* original value */
+  }
+
+  if (lua_getmetatable(L, 1))
+    lua_setmetatable(L, 2);
+  
+  return 1;
+}
+
+
+/*
+** Find a non-nil value in the sequence part.
+** Uses Lua equality semantics, including __eq.
+*/
+static int tfind (lua_State *L) {
+  lua_Unsigned n;
+  lua_Unsigned i;
+  lua_Integer start;
+
+  luaL_checktype(L, 1, LUA_TTABLE);
+  luaL_checkany(L, 2);
+
+  start = luaL_optinteger(L, 3, 1);
+  luaL_argcheck(L, start >= 1, 3, "start index must be positive");
+
+  n = lua_rawlen(L, 1);
+
+  for (i = (lua_Unsigned)start; i <= n; i++) {
+    lua_rawgeti(L, 1, (lua_Integer)i);
+
+    if (!lua_isnil(L, -1) &&
+          lua_compare(L, -1, 2, LUA_OPEQ)) {
+      lua_pushinteger(L, (lua_Integer)i);
+      return 1;
+    }
+
+    lua_pop(L, 1);
+  }
+
+  lua_pushnil(L);
+  return 1;
+}
+
+
+/*
+** Collect all raw keys into a sequential table.
+** Iteration order is unspecified.
+*/
+static int tkeys (lua_State *L) {
+  lua_Integer index = 0;
+
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_settop(L, 1);
+
+  lua_newtable(L);  /* result: index 2 */
+  lua_pushnil(L);
+
+  while (lua_next(L, 1) != 0) {
+    lua_pushvalue(L, -2);
+    lua_rawseti(L, 2, ++index);
+    lua_pop(L, 1);
+  }
+
+  return 1;
+}
+
+
+/*
+** Collect all raw values into a sequential table.
+** Iteration order is unspecified.
+*/
+static int tvalues (lua_State *L) {
+  lua_Integer index = 0;
+
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_settop(L, 1);
+
+  lua_newtable(L);  /* result: index 2 */
+  lua_pushnil(L);
+
+  while (lua_next(L, 1) != 0) {
+    lua_pushvalue(L, -1);
+    lua_rawseti(L, 2, ++index);
+    lua_pop(L, 1);
+  }
+
+  return 1;
+}
+
+
+/*
+** Map a sequence.
+** Callback: fn(value, index) -> newValue
+**
+** A nil result removes that position in the result.
+*/
+static int tmap (lua_State *L) {
+  lua_Unsigned n;
+  lua_Unsigned i;
+
+  luaL_checktype(L, 1, LUA_TTABLE);
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  lua_settop(L, 2);
+
+  n = lua_rawlen(L, 1);
+  lua_newtable(L);  /* result: index 3 */
+
+  for (i = 1; i <= n; i++) {
+    lua_rawgeti(L, 1, (lua_Integer)i);
+
+    if (lua_isnil(L, -1))
+      return luaL_error(L, "table.map requires a dense sequence");
+
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, -2);
+    lua_pushinteger(L, (lua_Integer)i);
+
+    lua_call(L, 2, 1);
+
+    lua_rawseti(L, 3, (lua_Integer)i);
+    lua_pop(L, 1);  /* original value */
+  }
+
+  return 1;
+}
+
+
+/*
+** Filter a sequence.
+** Callback: fn(value, index) -> boolean-like result
+** Selected elements are packed without gaps.
+*/
+static int tfilter (lua_State *L) {
+  lua_Unsigned n;
+  lua_Unsigned i;
+  lua_Integer out = 0;
+
+  luaL_checktype(L, 1, LUA_TTABLE);
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  lua_settop(L, 2);
+
+  n = lua_rawlen(L, 1);
+  lua_newtable(L);  /* result: index 3 */
+
+  for (i = 1; i <= n; i++) {
+    int keep;
+
+    lua_rawgeti(L, 1, (lua_Integer)i);
+
+    if (lua_isnil(L, -1))
+      return luaL_error(L,
+                        "table.filter requires a dense sequence");
+
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, -2);
+    lua_pushinteger(L, (lua_Integer)i);
+
+    lua_call(L, 2, 1);
+
+    keep = lua_toboolean(L, -1);
+    lua_pop(L, 1);  /* predicate result */
+
+    if (keep) {
+      lua_pushvalue(L, -1);
+      lua_rawseti(L, 3, ++out);
+    }
+
+    lua_pop(L, 1);  /* original value */
+  }
+
+  return 1;
+}
+
 /* }====================================================== */
 
 
 static const luaL_Reg tab_funcs[] = {
+  /* Original Lua 5.5.1 functions */
   {"concat", tconcat},
   {"create", tcreate},
   {"insert", tinsert},
@@ -418,6 +630,16 @@ static const luaL_Reg tab_funcs[] = {
   {"remove", tremove},
   {"move", tmove},
   {"sort", sort},
+
+  /* Quvrena extensions */
+  {"clear", tclear},
+  {"clone", tclone},
+  {"find", tfind},
+  {"keys", tkeys},
+  {"values", tvalues},
+  {"map", tmap},
+  {"filter", tfilter},
+  
   {NULL, NULL}
 };
 
