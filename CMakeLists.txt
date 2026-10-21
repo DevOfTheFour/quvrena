@@ -12,6 +12,12 @@ if(NOT EXISTS "${LUA_SRC}/lua.h")
     message(FATAL_ERROR "Lua 5.5.1 sources not found in lua/src")
 endif()
 
+option(
+    QUVRENA_ENABLE_STD_JSON
+    "Enable the native std.json module"
+    ON
+)
+
 # Lua 5.5.1 core and standard libraries
 set(LUA_SOURCES
     lapi.c
@@ -48,6 +54,14 @@ set(LUA_SOURCES
     lzio.c
 )
 
+if(QUVRENA_ENABLE_STD_JSON)
+    list(APPEND LUA_SOURCES
+        quvjson.c
+        quvjson_decode.c
+        quvjson_encode.c
+    )
+endif()
+
 list(TRANSFORM LUA_SOURCES PREPEND "${LUA_SRC}/")
 
 add_library(quvrena_core STATIC ${LUA_SOURCES})
@@ -55,6 +69,12 @@ add_library(quvrena_core STATIC ${LUA_SOURCES})
 target_include_directories(quvrena_core PUBLIC
     "${LUA_SRC}"
 )
+
+if(QUVRENA_ENABLE_STD_JSON)
+    target_compile_definitions(quvrena_core PRIVATE
+        QUVRENA_ENABLE_STD_JSON=1
+    )
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_compile_definitions(quvrena_core PUBLIC
@@ -177,6 +197,90 @@ if(BUILD_TESTING)
             -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/math.lua"
     )
 
+    if(QUVRENA_ENABLE_STD_JSON)
+        add_test(
+            NAME quvrena_json
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_decode
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_decode.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_decode_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_decode.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_encode
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_encode.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_encode_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_encode.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_hardening
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_hardening.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_hardening_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_hardening.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_fuzz
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_fuzz.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_fuzz_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_fuzz.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_buffer_regression
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_buffer_regression.lua"
+        )
+
+        set_tests_properties(
+            quvrena_json_hardening
+            PROPERTIES TIMEOUT 40
+        )
+
+        set_tests_properties(
+            quvrena_json_fuzz
+            PROPERTIES TIMEOUT 60
+        )
+    else()
+        add_test(
+            NAME quvrena_json_disabled
+            COMMAND $<TARGET_FILE:quvrena>
+                -e "assert(package.preload['std.json'] == nil)"
+        )
+    endif()
+
     add_executable(quvrena_embed_test
         tests/embed_smoke.c
     )
@@ -184,6 +288,12 @@ if(BUILD_TESTING)
     target_link_libraries(quvrena_embed_test PRIVATE
         quvrena_core
     )
+    
+    if(QUVRENA_ENABLE_STD_JSON)
+        target_compile_definitions(quvrena_embed_test PRIVATE
+            QUVRENA_ENABLE_STD_JSON=1
+        )
+    endif()
 
     add_test(
         NAME quvrena_c_api
