@@ -11,6 +11,8 @@
 #include "quvjson.h"
 #include "quvjson_internal.h"
 
+#include <string.h>
+
 /*
 ** Private registry keys.
 ** Their addresses identify state-local registry entries.
