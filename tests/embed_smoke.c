@@ -29,6 +29,17 @@ int main(void)
         return 1;
     }
 
+    int string_status = luaL_dostring(L,
+        "local s, n = string.replace('a-a', 'a', 'b'); "
+        "assert(s == 'b-b' and n == 2); "
+        "assert(string.trim(' hello ') == 'hello')"
+    );
+
+    if (string_status != LUA_OK) {
+        lua_close(L);
+        return 1;
+    }
+
     lua_close(L);
 
     return success ? 0 : 1;

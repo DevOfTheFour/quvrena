@@ -138,7 +138,7 @@ if(BUILD_TESTING)
             -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/regression.lua"
     )
 
-    # Quvrena standard library tests
+    # Quvrena table extensions
     add_test(
         NAME quvrena_table_extensions
         COMMAND $<TARGET_FILE:quvrena>
@@ -149,6 +149,19 @@ if(BUILD_TESTING)
         NAME quvrena_table_extensions_compile
         COMMAND $<TARGET_FILE:quvrenac>
             -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/table.lua"
+    )
+
+    # Quvrena string extensions
+    add_test(
+        NAME quvrena_string_extensions
+        COMMAND $<TARGET_FILE:quvrena>
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/string.lua"
+    )
+
+    add_test(
+        NAME quvrena_string_extensions_compile
+        COMMAND $<TARGET_FILE:quvrenac>
+            -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/string.lua"
     )
 
     add_executable(quvrena_embed_test

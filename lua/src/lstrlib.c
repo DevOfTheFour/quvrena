@@ -1850,10 +1850,180 @@ static int str_unpack (lua_State *L) {
   return n + 1;
 }
 
+
+/*
+** string.split(s, separator [, maxSplits])
+** Plain byte-string splitting. Keeps empty fields.
+*/
+static int str_split (lua_State *L) {
+  size_t len, seplen, offset = 0;
+  const char *s = luaL_checklstring(L, 1, &len);
+  const char *sep = luaL_checklstring(L, 2, &seplen);
+  lua_Integer maxsplits = luaL_optinteger(L, 3, LUA_MAXINTEGER);
+  lua_Integer splits = 0;
+  lua_Integer index = 1;
+
+  luaL_argcheck(L, seplen > 0, 2, "separator must not be empty");
+  luaL_argcheck(L, maxsplits >= 0, 3, "maxSplits must not be negative");
+
+  lua_settop(L, 3);
+  lua_newtable(L);  /* result at index 4 */
+  while (splits < maxsplits) {
+    const char *found = lmemfind(s + offset, len - offset, sep, seplen);
+    size_t fieldlen;
+
+    if (found == NULL)
+      break;
+
+    fieldlen = (size_t)(found - (s + offset));
+
+    lua_pushlstring(L, s + offset, fieldlen);
+    lua_rawseti(L, 4, index++);
+
+    offset += fieldlen + seplen;
+    splits++;
+  }
+
+  lua_pushlstring(L, s + offset, len - offset);
+  lua_rawseti(L, 4, index);
+
+  return 1;
+}
+
+
+/*
+** Check whether a byte belongs to the trim set.
+*/
+static int str_istrimbyte (unsigned char c,
+                           const char *chars,
+                           size_t nchars) {
+  return memchr(chars, c, nchars) != NULL;
+}
+
+
+/*
+** string.trim(s [, chars])
+** Default: ASCII whitespace.
+*/
+static int str_trim (lua_State *L) {
+  size_t len, nchars;
+  size_t start = 0;
+  size_t end;
+
+  const char *s = luaL_checklstring(L, 1, &len);
+  const char *chars = luaL_optlstring(L, 2, " \t\n\r\f\v", &nchars);
+
+  end = len;
+
+  while (start < end &&
+         str_istrimbyte((unsigned char)s[start],
+                        chars, nchars)) {
+    start++;
+  }
+
+  while (end > start &&
+         str_istrimbyte((unsigned char)s[end - 1],
+                        chars, nchars)) {
+    end--;
+  }
+
+  lua_pushlstring(L, s + start, end - start);
+  return 1;
+}
+
+
+/*
+** string.startsWith(s, prefix)
+** Bytewise, case-sensitive.
+*/
+static int str_startswith (lua_State *L) {
+  size_t len, prefixlen;
+
+  const char *s = luaL_checklstring(L, 1, &len);
+  const char *prefix = luaL_checklstring(L, 2, &prefixlen);
+
+  int result = prefixlen <= len &&
+               memcmp(s, prefix, prefixlen) == 0;
+
+  lua_pushboolean(L, result);
+  return 1;
+}
+
+
+/*
+** string.endsWith(s, suffix)
+** Bytewise, case-sensitive.
+*/
+static int str_endswith (lua_State *L) {
+  size_t len, suffixlen;
+
+  const char *s = luaL_checklstring(L, 1, &len);
+  const char *suffix = luaL_checklstring(L, 2, &suffixlen);
+
+  int result = suffixlen <= len &&
+               memcmp(s + len - suffixlen,
+                      suffix, suffixlen) == 0;
+
+  lua_pushboolean(L, result);
+  return 1;
+}
+
+
+/*
+** string.replace(s, old, new [, maxReplacements])
+**
+** Plain, non-overlapping replacement.
+** Returns new string and replacement count.
+*/
+static int str_replace (lua_State *L) {
+  size_t len, oldlen, newlen;
+  size_t offset = 0;
+
+  const char *s = luaL_checklstring(L, 1, &len);
+  const char *oldstr = luaL_checklstring(L, 2, &oldlen);
+  const char *newstr = luaL_checklstring(L, 3, &newlen);
+
+  lua_Integer maxreplacements = luaL_optinteger(L, 4, LUA_MAXINTEGER);
+  lua_Integer count = 0;
+
+  luaL_Buffer b;
+
+  luaL_argcheck(L, oldlen > 0, 2, "search string must not be empty");
+  luaL_argcheck(L, maxreplacements >= 0, 4, "maxReplacements must not be negative");
+
+  luaL_buffinit(L, &b);
+
+  while (count < maxreplacements) {
+    const char *found = lmemfind(s + offset, len - offset, oldstr, oldlen);
+
+    if (found == NULL)
+      break;
+
+    luaL_addlstring(
+        &b, s + offset,
+        (size_t)(found - (s + offset)));
+
+    luaL_addlstring(&b, newstr, newlen);
+
+    offset = (size_t)(found - s) + oldlen;
+    count++;
+  }
+
+  luaL_addlstring(&b, s + offset, len - offset);
+  luaL_pushresult(&b);
+
+  lua_pushinteger(L, count);
+  return 2;
+}
+
+
+
+
 /* }====================================================== */
 
 
 static const luaL_Reg strlib[] = {
+  /* Original Lua 5.5.1 functions */
   {"byte", str_byte},
   {"char", str_char},
   {"dump", str_dump},
@@ -1871,6 +2041,13 @@ static const luaL_Reg strlib[] = {
   {"pack", str_pack},
   {"packsize", str_packsize},
   {"unpack", str_unpack},
+
+  /* Quvrena extensions */
+  {"split", str_split},
+  {"trim", str_trim},
+  {"startsWith", str_startswith},
+  {"endsWith", str_endswith},
+  {"replace", str_replace},
   {NULL, NULL}
 };
 
