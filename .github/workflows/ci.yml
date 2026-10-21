@@ -3,7 +3,7 @@ name: Quvrena CI
 on:
   push:
     branches:
-      - main
+      - '**'
     paths:
       - 'lua/src/**'
       - 'tests/**'
