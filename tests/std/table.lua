@@ -25,14 +25,17 @@ do
     assert(table.clear(t) == t)
     assert(next(t) == nil)
 
+    -- Metatable must be preserved
     assert(getmetatable(t) == mt)
 
+    -- Normal assignment must still invoke __newindex
     local ok = pcall(function()
         t.health = 50
     end)
 
     assert(not ok)
 
+    -- Raw assignment bypasses __newindex
     rawset(t, "health", 50)
 
     assert(t.health == 50)
