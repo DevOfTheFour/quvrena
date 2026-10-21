@@ -2123,22 +2123,31 @@ static void exprstat (LexState *ls) {
 
 
 /*
-** Recognize 'continue' only when used as a statement.
-** Keep existing assignments and function calls valid.
+** Recognize 'continue' as a statement only when
+** it is not used as an assignment target or call.
 */
-static int iscontinuestat(LexState *ls) {
+static int iscontinuestat (LexState *ls) {
   int next;
 
   if (ls->t.token != TK_NAME ||
       strcmp(getstr(ls->t.seminfo.ts), "continue") != 0)
     return 0;
-  
+
   next = luaX_lookahead(ls);
 
   switch (next) {
-    /* Ordinary assignment or function call */
+    /* Ordinary assignment */
     case '=':
     case ',':
+
+    /* Compound assignment */
+    case TK_ADDEQ:
+    case TK_SUBEQ:
+    case TK_MULEQ:
+    case TK_DIVEQ:
+    case TK_CONCATEQ:
+
+    /* Indexed assignment or function call */
     case '.':
     case '[':
     case ':':

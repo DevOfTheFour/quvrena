@@ -126,6 +126,18 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/compound_assignment.lua"
     )
 
+    add_test(
+        NAME quvrena_language_regression
+        COMMAND $<TARGET_FILE:quvrena>
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/regression.lua"
+    )
+
+    add_test(
+        NAME quvrena_language_regression_compile
+        COMMAND $<TARGET_FILE:quvrenac>
+            -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/language/regression.lua"
+    )
+
     add_executable(quvrena_embed_test
         tests/embed_smoke.c
     )
