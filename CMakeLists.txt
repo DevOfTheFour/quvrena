@@ -258,6 +258,12 @@ if(BUILD_TESTING)
                 -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_fuzz.lua"
         )
 
+        add_test(
+            NAME quvrena_json_buffer_regression
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_buffer_regression.lua"
+        )
+
         set_tests_properties(
             quvrena_json_hardening
             PROPERTIES TIMEOUT 40

@@ -14,6 +14,7 @@
 #define JSON_DEFAULT_MAX_BYTES 67108864u
 #define JSON_RECURSION_CEILING 256
 #define JSON_PATH_CAPACITY 4096u
+#define JSON_OUTPUT_CHUNK 4096u
 #define JSON_SAFE_INTEGER 9007199254740991LL
 
 #define JSON_KIND_NONE 0
@@ -22,7 +23,11 @@
 
 typedef struct JsonWriter {
   lua_State *L;
-  luaL_Buffer buffer;
+  /* Lua-managed string fragments: safe while the C API uses the stack. */
+  int chunks;  /* absolute stack index of the fragments table */
+  lua_Integer chunk_count;
+  char chunk[JSON_OUTPUT_CHUNK];
+  size_t chunk_used;
   size_t bytes;
   size_t max_bytes;
   lua_Integer max_depth;
@@ -66,13 +71,55 @@ static int jw_fail (JsonWriter *w, const char *code, const char *message) {
 }
 
 
-/* Check output size *before* adding data to a Lua buffer. */
+/*
+** Flush a complete or final output chunk into a Lua-managed table.
+** This operation leaves the Lua stack exactly as it found it.
+** It is safe to call inside lua_next and other recursive stack work.
+*/
+static void jw_flush (JsonWriter *w) {
+  if (w->chunk_used != 0) {
+    lua_pushlstring(w->L, w->chunk, w->chunk_used);
+    lua_rawseti(w->L, w->chunks, ++w->chunk_count);
+    w->chunk_used = 0;
+  }
+}
+
+
+/* Check the output limit before recording any bytes. */
 static int jw_add (JsonWriter *w, const char *data, size_t size) {
   if (size > w->max_bytes - w->bytes)
     return jw_fail(w, "size_limit", "maximum output bytes exceeded");
-  luaL_addlstring(&w->buffer, data, size);
   w->bytes += size;
+  while (size != 0) {
+    size_t free_bytes = JSON_OUTPUT_CHUNK - w->chunk_used;
+    size_t take = size < free_bytes ? size : free_bytes;
+    memcpy(w->chunk + w->chunk_used, data, take);
+    w->chunk_used += take;
+    data += take;
+    size -= take;
+    if (w->chunk_used == JSON_OUTPUT_CHUNK)
+      jw_flush(w);
+  }
   return 1;
+}
+
+
+/*
+** Assemble the final Lua string only after recursive encoding is finished.
+** luaL_Buffer is safe here: its stack slot stays at the top; luaL_addvalue
+** explicitly supports a single string value above that slot.
+*/
+static void jw_pushresult (JsonWriter *w) {
+  lua_State *L = w->L;
+  luaL_Buffer buffer;
+  lua_Integer i;
+  jw_flush(w);
+  luaL_buffinit(L, &buffer);
+  for (i = 1; i <= w->chunk_count; ++i) {
+    lua_rawgeti(L, w->chunks, i);
+    luaL_addvalue(&buffer);
+  }
+  luaL_pushresult(&buffer);
 }
 
 
@@ -302,6 +349,7 @@ static int jw_pair (JsonWriter *w, int value_index,
                    const char *key, size_t keylen, int first) {
   size_t saved = w->path_length;
   int valid = w->path_valid;
+  value_index = lua_absindex(w->L, value_index);
   if (!first && !jw_char(w, ',')) return 0;
   if (!jw_indent(w, w->depth)) return 0;
   jw_path_key(w, key, keylen);
@@ -381,6 +429,7 @@ static int jw_table (JsonWriter *w, int index) {
   index = lua_absindex(L, index);
   if (w->depth >= w->max_depth || w->depth >= JSON_RECURSION_CEILING)
     return jw_fail(w, "depth_limit", "maximum container depth exceeded");
+  luaL_checkstack(L, 12, "JSON encoder stack");
 
   lua_pushvalue(L, index);
   lua_rawget(L, w->active);
@@ -588,8 +637,9 @@ int quvjson_encode (lua_State *L) {
   lua_settop(L, 2);
   lua_newtable(L);
   w.active = lua_absindex(L, -1);
-  luaL_buffinit(L, &w.buffer);
+  lua_newtable(L);
+  w.chunks = lua_absindex(L, -1);
   if (!jw_value(&w, 1)) return jw_pusherror(&w);
-  luaL_pushresult(&w.buffer);
+  jw_pushresult(&w);
   return 1;
 }
