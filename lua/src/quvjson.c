@@ -9,6 +9,7 @@
 #include "lua.h"
 #include "lauxlib.h"
 #include "quvjson.h"
+#include "quvjson_internal.h"
 
 /*
 ** Private registry keys.
@@ -63,6 +64,20 @@ static void json_pushtags (lua_State *L) {
 }
 
 
+void quvjson_tagtable (lua_State *L, int index,
+                      const char *kind) {
+  index = lua_absindex(L, index);
+
+  json_pushtags(L);
+
+  lua_pushvalue(L, index);
+  lua_pushstring(L, kind);
+  lua_rawset(L, -3);
+
+  lua_pop(L, 1);
+}
+
+
 /*
 ** Mark an existing table, or create an empty one.
 **
@@ -78,14 +93,7 @@ static int json_tag (lua_State *L, const char *kind) {
     lua_settop(L, 1);
   }
 
-  json_pushtags(L);     /* [table, tags] */
-
-  lua_pushvalue(L, 1);  /* key: original table */
-  lua_pushstring(L, kind);
-
-  lua_rawset(L, -3);    /* tags[table] = kind */
-
-  lua_pop(L, 1);        /* remove tag map */
+  quvjson_tagtable(L, 1, kind);
 
   return 1;             /* return original table */
 }
@@ -147,7 +155,7 @@ static int json_null_tostring (lua_State *L) {
 ** It is a full userdata, not nil or light userdata.
 ** The registry keeps the singleton alive.
 */
-static void json_pushnull (lua_State *L) {
+void quvjson_pushnull (lua_State *L) {
   lua_rawgetp(L, LUA_REGISTRYINDEX, &json_null_key);
 
   if (!lua_isnil(L, -1))
@@ -182,6 +190,7 @@ static const luaL_Reg jsonlib[] = {
   {"array", json_array},
   {"object", json_object},
   {"kind", json_kind},
+  {"decode", quvjson_decode},
   {NULL, NULL}
 };
 
@@ -194,7 +203,7 @@ static const luaL_Reg jsonlib[] = {
 LUAMOD_API int luaopen_std_json(lua_State *L) {
   luaL_newlib(L, jsonlib);
 
-  json_pushnull(L);
+  quvjson_pushnull(L);
   lua_setfield(L, -2, "null");
 
   return 1;

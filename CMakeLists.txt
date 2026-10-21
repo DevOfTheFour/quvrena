@@ -57,6 +57,7 @@ set(LUA_SOURCES
 if(QUVRENA_ENABLE_STD_JSON)
     list(APPEND LUA_SOURCES
         quvjson.c
+        quvjson_decode.c
     )
 endif()
 
@@ -206,6 +207,18 @@ if(BUILD_TESTING)
             NAME quvrena_json_compile
             COMMAND $<TARGET_FILE:quvrenac>
                 -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_decode
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_decode.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_decode_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_decode.lua"
         )
     endif()
 
