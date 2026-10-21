@@ -1,9 +1,18 @@
-# Quvrena `std.json` - API Contract v1
+# Quvrena `std.json` - API Specification v1
 
-> **Status:** Accepted design specification; implementation pending.  
-> **Date:** 2026-10-21  
-> **Compatibility target:** Quvrena based on Lua 5.5.1  
-> **Scope:** Public Lua API and observable behavior. Internal C data structures and file layout are not specified here.  
+> **Document type:** API specification  
+> **Specification status:** Accepted  
+> **Implementation status:** Implemented (`main`)  
+> **API stability:** Experimental  
+> **API version:** v1  
+> **Created:** 2026-10-21  
+> **Last reviewed:** 2026-10-22  
+> **Compatibility:** Quvrena based on Lua 5.5.1  
+> **Scope:** Public Lua API and observable behavior; internal C implementation details are not contractual.
+
+This specification describes the implemented `std.json` API. **Implemented** means the module is present in `main`; **Experimental** means compatibility is not yet guaranteed across future Quvrena releases. The normative requirements below remain the accepted API contract.
+
+See [Documentation Style](DOCUMENTATION_STYLE.md) for status definitions and document conventions.
 
 ## 1. Goals and non-goals
 
@@ -26,7 +35,7 @@ json.kind(value)                      --> "array" | "object" | nil
 json.null                             -- unique JSON null singleton
 ```
 
-The default Quvrena runtime MUST register a loader for `std.json` so that `require("std.json")` works without finding a Lua file on disk. Embedded hosts MAY provide a restricted set of libraries/modules; a host that does not enable this optional module need not expose it. No global `json` variable is introduced. Details of the C registration function and build option are implementation details to settle during implementation, not new public Lua APIs in this contract.
+The default Quvrena runtime MUST register a loader for `std.json` so that `require("std.json")` works without finding a Lua file on disk. Embedded hosts MAY provide a restricted set of libraries/modules; a host that does not enable this optional module need not expose it. No global `json` variable is introduced. The module is built by default and can be excluded with the CMake option `QUVRENA_ENABLE_STD_JSON=OFF`. The C registration function and build option are implementation details, not additional public Lua APIs.
 
 All documented options are optional. Unknown option names and wrong option types MUST raise a Lua argument error (programmer error). Invalid JSON data, unsupported values and configured resource-limit violations MUST return `nil, err` as specified below, except for allocation failures and other unrecoverable Lua runtime errors.
 
@@ -106,7 +115,7 @@ Returns one JSON UTF-8 string on success. On a data/limit error returns `nil, er
 | `sort_keys` | boolean | `false` | Sort object keys by raw UTF-8 byte order |
 | `ensure_ascii` | boolean | `false` | Escape non-ASCII characters with `\uXXXX` (surrogate pairs when necessary) |
 | `safe_integers` | boolean | `false` | Reject Lua integer values outside `[-(2^53 - 1), 2^53 - 1]` |
-| `max_depth` | positive integer | `128` | Maximum nested container depth |
+| `max_depth` | integer `1..256` | `128` | Maximum nested container depth |
 | `max_bytes` | positive integer | `67108864` | Maximum output bytes (64 MiB) |
 | `max_values` | positive integer | `1000000` | Maximum total serialized JSON values |
 
@@ -131,7 +140,7 @@ The first argument MUST be a Lua string. Only complete RFC 8259 JSON text is acc
 |---|---|---|---|
 | `duplicate_keys` | `"error"` or `"last"` | `"error"` | Reject duplicate object names or keep last value |
 | `integer_overflow` | `"error"` or `"float"` | `"error"` | Action when integral JSON literal exceeds `lua_Integer` range |
-| `max_depth` | positive integer | `128` | Maximum nested container depth |
+| `max_depth` | integer `1..256` | `128` | Maximum nested container depth |
 | `max_bytes` | positive integer | `67108864` | Maximum input bytes (64 MiB) |
 | `max_values` | positive integer | `1000000` | Maximum parsed JSON values |
 
@@ -141,7 +150,7 @@ Duplicate keys are compared **after JSON escape decoding**: `"a"` and `"\u0061"`
 
 ## 6. Depth and resource accounting
 
-Depth is the number of currently nested object/array containers: a root scalar has depth 0, a root array/object has depth 1. A child array/object increments depth by one. `max_values` counts the root and every contained JSON value (including each container, scalar and `null`); object member names do **not** count as values. `max_bytes` counts the complete UTF-8 byte length of the input for decode and encoded output for encode. Exceeding a configured bound returns the corresponding structured limit error; invalid option values are argument errors. Resource limits do not guarantee a hard bound on internal temporary allocations or CPU usage, and Lua allocation failures may still raise runtime errors.
+The implementation caps `max_depth` at 256 to protect the native parser and encoder stacks. Depth is the number of currently nested object/array containers: a root scalar has depth 0, a root array/object has depth 1. A child array/object increments depth by one. `max_values` counts the root and every contained JSON value (including each container, scalar and `null`); object member names do **not** count as values. `max_bytes` counts the complete UTF-8 byte length of the input for decode and encoded output for encode. Exceeding a configured bound returns the corresponding structured limit error; invalid option values are argument errors. Resource limits do not guarantee a hard bound on internal temporary allocations or CPU usage, and Lua allocation failures may still raise runtime errors.
 
 ## 7. Numeric semantics
 
@@ -216,10 +225,40 @@ if value == nil then
 end
 ```
 
-## 10. References
+## 10. Implementation and verification
 
-* [RFC 8259 - JSON Data Interchange Format](https://www.rfc-editor.org/rfc/rfc8259)
-* [RFC 7493 - I-JSON](https://www.rfc-editor.org/rfc/rfc7493)
-* [RFC 6901 - JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)
-* [RFC 8785 - JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785)
-* [Lua 5.5 Reference Manual](https://www.lua.org/manual/5.5/manual.html)
+### Implementation
+
+The native C99 module is included in the default Quvrena build and registered for `require("std.json")` through Lua's preload mechanism. There are no additional runtime dependencies or implicit file/network operations.
+
+- [Module registration, `json.null`, and container tags](../lua/src/quvjson.c)
+- [Strict JSON decoder](../lua/src/quvjson_decode.c)
+- [JSON encoder](../lua/src/quvjson_encode.c)
+- [Build configuration](../CMakeLists.txt) - `QUVRENA_ENABLE_STD_JSON` defaults to `ON`; `OFF` excludes the module
+
+### Verification
+
+The following repository tests cover the public API and relevant edge cases:
+
+- [Foundation](../tests/std/json.lua)
+- [Decoder](../tests/std/json_decode.lua) and [encoder](../tests/std/json_encode.lua)
+- [Boundary and adversarial cases](../tests/std/json_hardening.lua)
+- [Deterministic randomized inputs](../tests/std/json_fuzz.lua)
+- [Large-buffer stack-corruption regression](../tests/std/json_buffer_regression.lua)
+
+The [CI workflow](../.github/workflows/ci.yml) configures Windows/MSVC and Linux/GCC/Clang builds, runs a JSON benchmark in Release configurations, includes a Clang AddressSanitizer job, and validates a build with `QUVRENA_ENABLE_STD_JSON=OFF`. These checks provide regression coverage but are not a formal proof of memory safety or complete RFC conformance.
+
+### Current limitations
+
+- The API remains **Experimental** until Quvrena explicitly adopts a compatibility policy.
+- Only strict RFC 8259 JSON is supported; streaming, JSON5, JSON Schema, JSON Patch, and canonicalization are out of scope for v1.
+- The `max_depth` option accepts values from 1 through 256, with a default of 128.
+- Exact numeric edge-case behavior is specified for the standard 64-bit integer / binary64 configuration.
+
+## 11. References
+
+- [RFC 8259 - JSON Data Interchange Format](https://www.rfc-editor.org/rfc/rfc8259)
+- [RFC 7493 - I-JSON](https://www.rfc-editor.org/rfc/rfc7493)
+- [RFC 6901 - JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)
+- [RFC 8785 - JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785)
+- [Lua 5.5 Reference Manual](https://www.lua.org/manual/5.5/manual.html)
