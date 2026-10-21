@@ -128,3 +128,86 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+      
+      - name: Validate JSON benchmark
+        if: matrix.build_type == 'Release'
+        shell: pwsh
+        run: |
+          if ($IsWindows) {
+              $binary = "./build/Release/quvrena.exe"
+          } else {
+              $binary = "./build/quvrena"
+          }
+
+          & $binary ./benchmarks/json.lua 3000
+
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+  json-sanitizer:
+    name: Ubuntu / Clang / AddressSanitizer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure ASan build
+        shell: bash
+        run: |
+          cmake -S . -B build-asan \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DQUVRENA_ENABLE_STD_JSON=ON \
+            -DQUVRENA_REQUIRE_UPSTREAM_TESTS=OFF \
+            -DCMAKE_C_FLAGS="-O1 -g -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+
+      - name: Build with ASan
+        run: cmake --build build-asan --parallel 2
+
+      - name: Run JSON tests with ASan
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+        run: |
+          ctest --test-dir build-asan \
+            -R "quvrena_json|quvrena_c_api" \
+            --output-on-failure
+
+      - name: Run JSON benchmark with ASan
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+        run: |
+          ./build-asan/quvrena ./benchmarks/json.lua 3000
+
+  without-json:
+    name: Ubuntu / GCC / JSON disabled
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-no-json \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON \
+            -DQUVRENA_ENABLE_STD_JSON=OFF
+
+      - name: Build
+        run: cmake --build build-no-json --parallel 2
+
+      - name: Test without JSON
+        run: |
+          ctest --test-dir build-no-json \
+            -R "quvrena_json_disabled|quvrena_c_api|quvrena_smoke" \
+            --output-on-failure
+
