@@ -20,6 +20,10 @@
 #include "lauxlib.h"
 #include "llimits.h"
 
+#if defined(QUVRENA_ENABLE_STD_JSON)
+#include "quvjson.h"
+#endif
+
 
 /*
 ** Standard Libraries. (Must be listed in the same ORDER of their
@@ -58,6 +62,14 @@ LUALIB_API void luaL_openselectedlibs (lua_State *L, int load, int preload) {
     }
   }
   lua_assert((mask >> 1) == LUA_UTF8LIBK);
+#if defined(QUVRENA_ENABLE_STD_JSON)
+  /*
+  ** Register Quvrena JSON module in package.preload.
+  ** Do not load it eagerly or create a global.
+  */
+  lua_pushcfunction(L, luaopen_std_json);
+  lua_setfield(L, -2, "std.json");
+#endif
   lua_pop(L, 1);  /* remove PRELOAD table */
 }
 

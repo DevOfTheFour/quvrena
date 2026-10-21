@@ -50,6 +50,17 @@ int main(void)
         success = 0;
     }
 
+#ifdef QUVRENA_ENABLE_STD_JSON
+    if (luaL_dostring(L,
+        "local json = require('std.json'); "
+        "local t = json.array({1, 2, 3}); "
+        "assert(json.kind(t) == 'array'); "
+        "assert(type(json.null) == 'userdata')"
+    ) != LUA_OK) {
+        success = 0;
+    }
+#endif
+
     lua_close(L);
 
     return success ? 0 : 1;
