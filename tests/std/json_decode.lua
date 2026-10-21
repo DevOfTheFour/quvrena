@@ -1,4 +1,4 @@
--- Quvrena std.json decoder conformance tests (M2.4b).
+-- Quvrena std.json decoder conformance tests
 local json = require("std.json")
 
 local function reject(text, expected, options)

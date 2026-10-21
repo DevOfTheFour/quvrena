@@ -64,6 +64,39 @@ static void json_pushtags (lua_State *L) {
 }
 
 
+/* Compare userdata identity with the state-local JSON null singleton. */
+int quvjson_isnull(lua_State *L, int index) {
+    int equal;
+    index = lua_absindex(L, index);
+    quvjson_pushnull(L);
+    equal = lua_rawequal(L, index, -1);
+    lua_pop(L, 1);
+    return equal;
+}
+
+
+/* Return 0 for unmarked, 1 for explicitly tagged array,
+   2 for explicitly tagged object. Metamethods are not invoked. */
+int quvjson_getkind(lua_State *L, int index) {
+    int result = 0;
+    size_t len;
+    const char *tag;
+    index = lua_absindex(L, index);
+    if (!lua_istable(L, index))
+        return 0;
+    json_pushtags(L);
+    lua_pushvalue(L, index);
+    lua_rawget(L, -2);
+    tag = lua_tolstring(L, -1, &len);
+    if (tag != NULL && len == 5 && memcmp(tag, "array", 5) == 0)
+        result = 1;
+    else if (tag != NULL && len == 6 && memcmp(tag, "object", 6) == 0)
+        result = 2;
+    lua_pop(L, 2);  /* tag + tag registry table */
+    return result;
+}
+
+
 void quvjson_tagtable (lua_State *L, int index,
                       const char *kind) {
   index = lua_absindex(L, index);
@@ -191,6 +224,7 @@ static const luaL_Reg jsonlib[] = {
   {"object", json_object},
   {"kind", json_kind},
   {"decode", quvjson_decode},
+  {"encode", quvjson_encode},
   {NULL, NULL}
 };
 
