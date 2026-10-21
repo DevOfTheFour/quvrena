@@ -220,4 +220,4 @@ do
     assert(calculate(7) == 16)
 end
 
-print("Quvrena M1 regression tests passed")
+print("Quvrena regression tests passed")

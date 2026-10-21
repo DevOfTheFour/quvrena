@@ -164,6 +164,19 @@ if(BUILD_TESTING)
             -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/string.lua"
     )
 
+    # Quvrena math extensions
+    add_test(
+        NAME quvrena_math_extensions
+        COMMAND $<TARGET_FILE:quvrena>
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/math.lua"
+    )
+
+    add_test(
+        NAME quvrena_math_extensions_compile
+        COMMAND $<TARGET_FILE:quvrenac>
+            -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/math.lua"
+    )
+
     add_executable(quvrena_embed_test
         tests/embed_smoke.c
     )

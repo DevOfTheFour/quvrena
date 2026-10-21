@@ -621,7 +621,6 @@ static int tfilter (lua_State *L) {
 
 
 static const luaL_Reg tab_funcs[] = {
-  /* Original Lua 5.5.1 functions */
   {"concat", tconcat},
   {"create", tcreate},
   {"insert", tinsert},

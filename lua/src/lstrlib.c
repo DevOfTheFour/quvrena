@@ -2016,14 +2016,10 @@ static int str_replace (lua_State *L) {
   return 2;
 }
 
-
-
-
 /* }====================================================== */
 
 
 static const luaL_Reg strlib[] = {
-  /* Original Lua 5.5.1 functions */
   {"byte", str_byte},
   {"char", str_char},
   {"dump", str_dump},
@@ -2048,6 +2044,7 @@ static const luaL_Reg strlib[] = {
   {"startsWith", str_startswith},
   {"endsWith", str_endswith},
   {"replace", str_replace},
+  
   {NULL, NULL}
 };
 

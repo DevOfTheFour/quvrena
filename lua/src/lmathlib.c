@@ -661,6 +661,182 @@ static void setrandfunc (lua_State *L) {
   luaL_setfuncs(L, randfuncs, 1);
 }
 
+
+/*
+** Require an actual, finite Lua number.
+** Numeric strings, NaN and infinities are rejected.
+*/
+static lua_Number qmath_checkfinite (lua_State *L, int arg) {
+  lua_Number n;
+
+  luaL_checktype(L, arg, LUA_TNUMBER);
+  n = lua_tonumber(L, arg);
+
+  luaL_argcheck(L, isfinite(n), arg, "finite number expected");
+
+  return n;
+}
+
+
+/*
+** Push a floating-point result, rejecting overflow
+** and undefined results.
+*/
+static int qmath_pushfinite (lua_State *L, lua_Number n) {
+  if (!isfinite(n))
+    return luaL_error(L, "non-finite arithmetic result");
+
+  lua_pushnumber(L, n);
+  return 1;
+}
+
+
+/*
+** math.clamp(value, minimum, maximum)
+**
+** Preserve the integer/float subtype and exact
+** Lua numerical comparisons.
+*/
+static int math_clamp (lua_State *L) {
+  int result = 1;
+
+  qmath_checkfinite(L, 1);
+  qmath_checkfinite(L, 2);
+  qmath_checkfinite(L, 3);
+
+  luaL_argcheck(L, lua_compare(L, 2, 3, LUA_OPLE), 3, "maximum must be >= minimum");
+
+  if (lua_compare(L, 1, 2, LUA_OPLT))
+    result = 2;
+  else if (lua_compare(L, 3, 1, LUA_OPLT))
+    result = 3;
+
+  lua_pushvalue(L, result);
+  return 1;
+}
+
+
+/*
+** Numerically safer linear interpolation.
+**
+** For opposite-sign endpoints, avoid computing
+** (b - a), which could overflow unnecessarily.
+*/
+static lua_Number qmath_lerpvalue (lua_Number a,
+                                   lua_Number b,
+                                   lua_Number t) {
+  if (t == 0)
+    return a;
+
+  if (t == 1)
+    return b;
+
+  if ((a < 0 && b > 0) ||
+      (a > 0 && b < 0)) {
+    return a * (1 - t) + b * t;
+  }
+
+  return a + (b - a) * t;
+}
+
+
+/*
+** math.lerp(a, b, t)
+**
+** Allows extrapolation when t is outside [0, 1].
+*/
+static int math_lerp (lua_State *L) {
+  lua_Number a = qmath_checkfinite(L, 1);
+  lua_Number b = qmath_checkfinite(L, 2);
+  lua_Number t = qmath_checkfinite(L, 3);
+
+  return qmath_pushfinite(L, qmath_lerpvalue(a, b, t));
+}
+
+
+/*
+** math.round(x)
+**
+** Round halves away from zero.
+** Avoid x +/- 0.5 before floor/ceil because that
+** may round values just below a half incorrectly.
+*/
+static int math_round (lua_State *L) {
+  lua_Number n = qmath_checkfinite(L, 1);
+  lua_Number base;
+  lua_Number result;
+
+  if (lua_isinteger(L, 1)) {
+    lua_settop(L, 1);
+    return 1;
+  }
+
+  if (n >= 0) {
+    base = l_mathop(floor)(n);
+    result = base + ((n - base >= l_mathop(0.5)) ? 1 : 0);
+  }
+  else {
+    base = l_mathop(ceil)(n);
+    result = base - ((base - n >= l_mathop(0.5)) ? 1 : 0);
+  }
+
+  /*
+  ** push as integer if representable, otherwise float.
+  */
+  pushnumint(L, result);
+  return 1;
+}
+
+
+/*
+** math.sign(x)
+** Always returns an integer.
+*/
+static int math_sign (lua_State *L) {
+  lua_Number n = qmath_checkfinite(L, 1);
+  lua_Integer result = (n > 0) - (n < 0);
+
+  lua_pushinteger(L, result);
+  return 1;
+}
+
+
+/*
+** math.mapRange(value, fromMin, fromMax, toMin, toMax)
+**
+** Maps a value using linear interpolation.
+** Reversed ranges and extrapolation are supported.
+*/
+static int math_maprange (lua_State *L) {
+  lua_Number value = qmath_checkfinite(L, 1);
+  lua_Number frommin = qmath_checkfinite(L, 2);
+  lua_Number frommax = qmath_checkfinite(L, 3);
+  lua_Number tomin = qmath_checkfinite(L, 4);
+  lua_Number tomax = qmath_checkfinite(L, 5);
+
+  lua_Number numerator;
+  lua_Number denominator;
+  lua_Number t;
+
+  luaL_argcheck(L, frommin != frommax, 3, "source range must not be empty");
+
+  numerator = value - frommin;
+  denominator = frommax - frommin;
+
+  /*
+  ** Large endpoints may overflow an intermediate
+  ** subtraction even when the ratio is representable.
+  */
+  if (!isfinite(numerator) || !isfinite(denominator)) {
+    numerator = value / 2 - frommin / 2;
+    denominator = frommax / 2 - frommin / 2;
+  }
+
+  t = numerator / denominator;
+
+  return qmath_pushfinite(L, qmath_lerpvalue(tomin, tomax, t));
+}
+
 /* }================================================================== */
 
 
@@ -742,6 +918,14 @@ static const luaL_Reg mathlib[] = {
   {"huge", NULL},
   {"maxinteger", NULL},
   {"mininteger", NULL},
+
+  /* Quvrena extensions */
+  {"clamp", math_clamp},
+  {"lerp", math_lerp},
+  {"round", math_round},
+  {"sign", math_sign},
+  {"mapRange", math_maprange},
+  
   {NULL, NULL}
 };
 

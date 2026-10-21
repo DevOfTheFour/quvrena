@@ -40,6 +40,16 @@ int main(void)
         return 1;
     }
 
+    if (luaL_dostring(L,
+        "assert(math.clamp(15, 0, 10) == 10); "
+        "assert(math.round(-2.5) == -3); "
+        "assert(math.sign(-5) == -1); "
+        "assert(math.lerp(0, 100, 0.5) == 50); "
+        "assert(math.mapRange(5, 0, 10, 0, 100) == 50)"
+    ) != LUA_OK) {
+        success = 0;
+    }
+
     lua_close(L);
 
     return success ? 0 : 1;
