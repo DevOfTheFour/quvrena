@@ -233,6 +233,46 @@ if(BUILD_TESTING)
             COMMAND $<TARGET_FILE:quvrenac>
                 -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_encode.lua"
         )
+
+        add_test(
+            NAME quvrena_json_hardening
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_hardening.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_hardening_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_hardening.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_fuzz
+            COMMAND $<TARGET_FILE:quvrena>
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_fuzz.lua"
+        )
+
+        add_test(
+            NAME quvrena_json_fuzz_compile
+            COMMAND $<TARGET_FILE:quvrenac>
+                -p "${CMAKE_CURRENT_SOURCE_DIR}/tests/std/json_fuzz.lua"
+        )
+
+        set_tests_properties(
+            quvrena_json_hardening
+            PROPERTIES TIMEOUT 40
+        )
+
+        set_tests_properties(
+            quvrena_json_fuzz
+            PROPERTIES TIMEOUT 60
+        )
+    else()
+        add_test(
+            NAME quvrena_json_disabled
+            COMMAND $<TARGET_FILE:quvrena>
+                -e "assert(package.preload['std.json'] == nil)"
+        )
     endif()
 
     add_executable(quvrena_embed_test
